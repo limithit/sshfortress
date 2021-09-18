@@ -4,7 +4,7 @@
 
 目前市面上存在的大部分堡垒机，要么是做一个Web界面的连接终端，要么就是跳板机再跳一次，试想如果你用的是命令行工具怎么用Web终端，又怎么批量操作使用跳板机，这无疑是多此一举，文件无法互传等其他限制，这也就是sshfortress出现的原因，它不会改变用户原有高效的使用习惯。
 
-尝试所有SSHfortress功能-免费30天
+SSHfortress社区版免费使用。
 
 另外，我们提供社区版、专业版和教育版，社区版完全免费,用户无须注册和授权文件，[版本区别](https://sshfortress.com/cn/community.html)。
 这个说明是介绍如何安装sshfortress系统，它有一个Web管理界面greatfortress是用java实现的用来可示化的增加账号、资产等功能；后端sshfortress是在openssh的基础上开发的功能，好了往下面看如何安装和配置吧。  
@@ -118,7 +118,7 @@ WantedBy=multi-user.target
  
 ## 依赖
 0. glibc 2.17+
-1. mysql 5.6+   or MariaDB
+1. mysql 5.6+   or MariaDB   
 2. jdk 1.8  
 3. tomcat 8 
 4. sshfortress
@@ -149,7 +149,17 @@ sshfortress-1.6.1.tar.gz                           09-Jan-2020 15:58     10M
 ```
 
 ### mysql 
+`数据库支持自定义配置,可以修改`/etc/ssh/sshd_config`文件，默认连接本机，可配置成其他地址如rds(tomcat连接池也要修改),就不需要安装mysql了`
+```
+....
+sshfortress_host     	localhost
+sshfortress_user 	    audit
+sshfortress_password 	audit
+sshfortress_database 	audit_sec
+sshfortress_port      3306
+.....
 
+```
 *  选项1： 源码编译
 
 ```
@@ -237,6 +247,8 @@ sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
 # tar zxvf greatfortress.tar.gz -C /usr/local/tomcat/webapps
 # sed -i 's/192.168.7.3/x.x.x.x/g' /usr/local/tomcat/webapps/greatfortress/common/layui/layui.js
 # /usr/local/tomcat/bin/catalina.sh start
+
+#如果tomcat不显示验证码，可以在catalina.sh中加入JAVA_OPTS="$JAVA_OPTS -Djava.awt.headless=true" 
 
 x.x.x.x 是你的监听地址
 http://x.x.x.x:8080/greatfortress  

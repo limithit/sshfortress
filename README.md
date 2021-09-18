@@ -2,7 +2,6 @@
 
 [中文](https://github.com/sshfortress/sshfortress/blob/master/zh/README.md)  [English](https://github.com/sshfortress/sshfortress/blob/master/README.md)
 
-Try all SSHfortress features - free for 30 days
 
 We provide community edition, professional edition and education edition, community edition is completely free, [version differences](https://sshfortress.com/en/community.html).
 
@@ -135,7 +134,16 @@ sshfortress-1.6.1.tar.gz                           09-Jan-2020 15:58     10M
 ```
 
 ### mysql 
-
+Database support custom configuration, you can modify the `/etc/ssh/sshd_config` file, the default connection to this It can be configured to other addresses such as rds (tomcat connection pool should also be modified), so you don't need to install mysql.
+```
+....
+sshfortress_host     	localhost
+sshfortress_user 	    audit
+sshfortress_password 	audit
+sshfortress_database 	audit_sec
+sshfortress_port      3306
+.....
+```
 * option 1： Source compilation
 
 ```
@@ -225,6 +233,7 @@ sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
 # sed -i 's/192.168.7.3/x.x.x.x/g' /usr/local/tomcat/webapps/greatfortress/common/layui/layui.js
 # /usr/local/tomcat/bin/catalina.sh start
 
+# If tomcat doesn't show the CAPTCHA, you can add it to catalina.sh JAVA_OPTS="$JAVA_OPTS -Djava.awt.headless=true"
 x.x.x.x Is your listening address
 http://x.x.x.x:8080/greatfortress  
 Account: fortress 
