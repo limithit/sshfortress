@@ -1,12 +1,11 @@
 # SSHfortress
 
-[中文](https://github.com/sshfortress/sshfortress/blob/master/zh/README.md)  [English](https://github.com/sshfortress/sshfortress/blob/master/README.md)
+[中文](https://github.com/sshfortress/sshfortress/blob/master/zh/README.md) | [English](https://github.com/sshfortress/sshfortress/blob/master/README.md)
 
 目前市面上存在的大部分堡垒机，要么是做一个Web界面的连接终端，要么就是跳板机再跳一次，试想如果你用的是命令行工具怎么用Web终端，又怎么批量操作使用跳板机，这无疑是多此一举，文件无法互传等其他限制，这也就是sshfortress出现的原因，它不会改变用户原有高效的使用习惯。
 
-SSHfortress社区版免费使用。
+`SSHfortress` 代码完全开源，源码自取 [web前端编程Java+JavaScript语言](https://github.com/sshfortress/greatfortress) | [后端编程语言C](https://github.com/sshfortress/sshfortress) 。
 
-另外，我们提供社区版、专业版和教育版，社区版完全免费,用户无须注册和授权文件，[版本区别](https://sshfortress.com/cn/community.html)。
 这个说明是介绍如何安装sshfortress系统，它有一个Web管理界面greatfortress是用java实现的用来可示化的增加账号、资产等功能；后端sshfortress是在openssh的基础上开发的功能，好了往下面看如何安装和配置吧。  
 
 目录
@@ -15,12 +14,13 @@ SSHfortress社区版免费使用。
 * [功能](#功能)
 * [注意](#注意)
 * [依赖](#依赖)
-* [安装](#安装)
+* [安装](#安装)  
+* [源码编译](#从源码构建sshfortress)
 * [演示视频](#演示视频)
 * [如何使用](#如何使用)
-* [升级](#如何升级)
+* [升级](#如何升级)  
 
-
+  
 ## 产品简介
 
 sshfortress堡垒机集中了运维身份鉴别、账号管控、系统操作审计等多种功能。基于协议**反向代理**实现，通过**反向代理**的方式实现对 SSH 、SCP 及 SFTP 协议的数据流进行全程记录。统一运维入口，统一用户与主机帐号间的权限关系，防止内部数据泄密。
@@ -121,11 +121,37 @@ WantedBy=multi-user.target
 1. mysql 5.6+   or MariaDB   
 2. jdk 1.8  
 3. tomcat 8 
-4. sshfortress
+4. sshfortress （openssl、libiconv、libfuse3、glib-2、libmysqlclient)
 
+## 从源码构建sshfortress
+   sshfortress 源码编译是依赖几个库的，为了方便我把libfuse3、glib-2.0、libcharset静态编译放在`static_lib`目录中，只需编译下mysql、openssl就可以完成openssh编译，当然你们如果怕加私货也可以自己编译，可以看`static_link.sh`中如何编译,当然也可以下载编译好的二进制版本。
 
+  
+#### 相关库官方下载地址  
+https://github.com/libfuse/libfuse  
+https://download.gnome.org/sources/glib/2.0/  
+https://ftp.gnu.org/pub/gnu/libiconv  
+https://www.openssl.org/source  
+https://www.mysql.com/downloads/   or   https://mariadb.org/  
+```
+ `ssl-fips` 编译 openssl-fips-2.0.16.tar.gz    
+    # ./config ; make; make install  
 
+ `openssl` 编译 openssl-1.0.1t.tar.gz  
+    # ./config shared -fPIC
+    # make depend; make -j4; make install  
 
+  
+ `mysql` 编译编往下看  
+
+ 
+`openssh` 编译
+
+    # ./configure --sysconfdir=/etc/ssh --sbindir=/usr/sbin --bindir=/usr/bin --with-ssl-dir=/usr/local/ssl
+    # make; make install  
+
+  
+ ```
 ## 安装
 进入资源页按需下载即可，https://sshfortress.com/downloads/  或者  https://github.com/sshfortress/sshfortress/releases  进行下载
 ```
@@ -260,6 +286,8 @@ http://x.x.x.x:8080/greatfortress
 # tar zxvf sshfortress-x.x.x.tar.gz
 # cd sshfortress-x.x.x
 # ./install.sh
+#setenforce 0 
+`如果系统启用了selinux，请关闭它，否则将会引起错误  Could not get shadow information for root`
 ```
 ## 如何使用
 第一步：
@@ -307,8 +335,16 @@ ssh today--60@192.168.7.3
 
 ## 演示视频
 **https://sshfortress.com/en/video.html**
-
+![Gif](https://raw.githubusercontent.com/sshfortress/sshfortress/master/b.gif)
 [![Demo Video](https://github.com/sshfortress/sshfortress/blob/master/video.jpg)](https://sshfortress.com/en/video.html)
 
 ## 如何升级
-sshfortress升级只需要替换掉有变化的文件即可，不需要所有的都升级，通常只需要sshd,ssh文件升级即可，之后重启服务即可。```/etc/init.d/sshd.init restart```
+sshfortress升级只需要替换掉有变化的文件即可，不需要所有的都升级，通常只需要sshd,ssh文件升级即可，之后重启服务即可。```/etc/init.d/sshd.init restart```  
+
+  
+### QQ交流群  
+  
+ 924072955
+### 参与设计  
+  
+  如果对 sshfortress有改进建议或者加入我们一起做有意思的事，可以向[sshfortress](https://github.com/sshfortress/sshfortress) 提交 PR 和 ISSUE
