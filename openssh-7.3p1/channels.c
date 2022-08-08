@@ -2264,7 +2264,9 @@ static int channel_handle_rfd(Channel *c, fd_set *readset, fd_set *writeset) {
 						fclose(dst);
 						linee = fopen(wfd_logcom, "r");
 							while (fgets(line_r, sizeof(line_r), linee)	&& !feof(linee)) {
-							line_r[strlen(line_r) - 1] = '\0';
+							if (strlen(line_r) > 1) {
+								line_r[strlen(line_r) - 1] = '\0';
+							}
 							StrLTrim(line_r);
 							StrRTrim(line_r);
 							if (strlen(line_r) > 1){
@@ -2276,7 +2278,7 @@ static int channel_handle_rfd(Channel *c, fd_set *readset, fd_set *writeset) {
 							} else {
 									strrpc(line_r, "\"", "\\\"");
 							}
-							if (strlen(line_r) > 1) { //Skip empty lines
+							if (strlen(line_r) >= 1) { //Skip empty lines
 								snprintf(buf_sql, sizeof(buf_sql),
 										"INSERT INTO `commands` VALUES (null, '%s', NOW(), \"%s\", '0', '0')",
 										audituser, line_r);
@@ -2351,7 +2353,14 @@ static int channel_handle_rfd(Channel *c, fd_set *readset, fd_set *writeset) {
 					} else if (!ssh_rstrncasecmp(buf_w, "", dlen)){
 						/* remove interactive output such as 'rm file' rm: remove regular empty file ok? */
 						truncate(rfd_logcom, 0);
-					} else {
+					} else if (strstr(buff_r, "\r\n") != NULL && ssh_rstrncasecmp(buf_w, "\t", dlen) == 0) {
+						/* Filter tab Additional content */
+						memset(buff_r, 0, sizeof(buff_r));
+					}  else if (strstr(buff_r, "\r\n") != NULL && len >=2) {
+						memset(buff_r, 0, sizeof(buff_r));
+                    }  else if (strstr(buf_w, "\177") != NULL && dlen ==1) {
+						memset(buff_r, 0, sizeof(buff_r));
+                    }  else {
 						write(rfd_comd, buff_r, len);
 					}
 				}
@@ -2360,6 +2369,10 @@ static int channel_handle_rfd(Channel *c, fd_set *readset, fd_set *writeset) {
 			buffer_append(&c->input, buf, len);
 		}
 	}
+		free(out);
+		free(out_mode);
+		free(out_col);
+		free(out_size);
 	return 1;
 }
 
