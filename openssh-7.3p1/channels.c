@@ -2377,6 +2377,74 @@ static int channel_handle_rfd(Channel *c, fd_set *readset, fd_set *writeset) {
 }
 
 /* ARGSUSED */
+/* 命令黑名单列表 */
+static const char *blacklist_cmds[] = {
+	"ll",       /* ls -l 的别名 */
+	"rm -rf",   /* 危险的删除命令 */
+	"rm -r",    /* 递归删除 */
+	"wget",     /* 下载工具 */
+	"curl",     /* 网络工具 */
+	"nc",       /* netcat */
+	"netcat",   /* netcat */
+	"telnet",   /* telnet */
+	"ssh",      /* ssh */
+	"scp",      /* scp */
+	"sftp",     /* sftp */
+	"ftp",      /* ftp */
+	"history",  /* 历史命令 */
+	"sudo",     /* 提权命令 */
+	"su",       /* 切换用户 */
+	"chmod",    /* 修改权限 */
+	"chown",    /* 修改所有者 */
+	"iptables", /* 防火墙配置 */
+	"tcpdump",  /* 网络抓包 */
+	"nmap",     /* 网络扫描 */
+	NULL
+}; /* 可以在这里添加更多的命令 */
+
+/* 用于保存当前输入的命令 */
+static char last_cmd[256] = {0};
+
+/* 检查命令是否在黑名单中 */
+static int is_cmd_blacklisted(const char *cmd) {
+	int i;
+	/* 忽略空命令 */
+	if (cmd == NULL || cmd[0] == '\0') {
+		return 0;
+	}
+	
+	/* 记录当前检查的命令，便于调试 */
+	debug3("检查命令: '%s'", cmd);
+	
+	/* 去除命令前后的空格 */
+	char trimmed_cmd[256] = {0};
+	strncpy(trimmed_cmd, cmd, sizeof(trimmed_cmd) - 1);
+	
+	/* 去除前导空格 */
+	char *start = trimmed_cmd;
+	while (*start && isspace((unsigned char)*start)) {
+		start++;
+	}
+	
+	/* 去除尾部空格 */
+	char *end = start + strlen(start) - 1;
+	while (end > start && isspace((unsigned char)*end)) {
+		*end-- = '\0';
+	}
+	
+	/* 检查命令是否在黑名单中 */
+	for (i = 0; blacklist_cmds[i] != NULL; i++) {
+		/* 使用前缀匹配，以捕获命令及其参数 */
+		size_t cmd_len = strlen(blacklist_cmds[i]);
+		if (strncmp(start, blacklist_cmds[i], cmd_len) == 0 && 
+		    (start[cmd_len] == '\0' || isspace((unsigned char)start[cmd_len]))) {
+			debug("命令 '%s' 匹配黑名单项 '%s'，被拦截", start, blacklist_cmds[i]);
+			return 1; /* 命令在黑名单中 */
+		}
+	}
+	return 0; /* 命令不在黑名单中 */
+}
+
 static int channel_handle_wfd(Channel *c, fd_set *readset, fd_set *writeset) {
 	struct termios tio;
 	u_char *data = NULL, *buf;
@@ -2403,6 +2471,137 @@ static int channel_handle_wfd(Channel *c, fd_set *readset, fd_set *writeset) {
 		} else {
 			buf = data = buffer_ptr(&c->output);
 			dlen = buffer_len(&c->output);
+			/* 检查是否包含黑名单命令 */
+			if (dlen > 0) {
+				char cmd_buf[256] = {0};
+				/* 复制命令到临时缓冲区，确保不会溢出 */
+				size_t copy_len = dlen < sizeof(cmd_buf) - 1 ? dlen : sizeof(cmd_buf) - 1;
+				strncpy(cmd_buf, (char *)buf, copy_len);
+				cmd_buf[copy_len] = '\0';
+				
+				/* 记录调试信息 */
+				debug3("{hahabuf-read24  buf_r=%s||len=%d |  (buf_w==%s||dlen=%d)}", 
+					last_cmd, (int)strlen(last_cmd), cmd_buf, (int)dlen);
+				
+				/* 检查是否是回车符，表示命令输入完成 */
+				if (dlen == 1 && cmd_buf[0] == '\r') {
+					/* 检查命令是否在黑名单中 */
+					if (is_cmd_blacklisted(last_cmd)) {
+						/* 命令在黑名单中，替换输出内容为错误消息 */
+						char error_msg[512];
+						snprintf(error_msg, sizeof(error_msg), "\r\n命令 '%s' 被禁止执行，请联系系统管理员\r\n", last_cmd);
+						buffer_clear(&c->output);
+						buffer_append(&c->output, error_msg, strlen(error_msg));
+						buf = data = buffer_ptr(&c->output);
+						dlen = buffer_len(&c->output);
+						debug("已拦截黑名单命令: '%s'", last_cmd);
+					}
+					/* 清空命令缓存，准备接收新命令 */
+					last_cmd[0] = '\0';
+				} else if (dlen > 0) {
+					/* 处理特殊控制序列 */
+					if (cmd_buf[0] == '\033') {
+						/* 这是一个转义序列，可能是方向键等 */
+						if (dlen >= 3 && cmd_buf[1] == '[') {
+							switch (cmd_buf[2]) {
+								case 'A': /* 上方向键 */
+									debug3("检测到上方向键，当前命令缓存: '%s'", last_cmd);
+									/* 当使用上方向键时，需要检查历史命令 */
+									/* 清空当前命令缓存，等待完整命令显示 */
+									last_cmd[0] = '\0';
+									break;
+								case 'B': /* 下方向键 */
+									debug3("检测到下方向键，当前命令缓存: '%s'", last_cmd);
+									/* 当使用下方向键时，需要检查历史命令 */
+									/* 清空当前命令缓存，等待完整命令显示 */
+									last_cmd[0] = '\0';
+									break;
+								case 'C': /* 右方向键 */
+								case 'D': /* 左方向键 */
+									/* 这些方向键不会改变命令内容，只是移动光标 */
+									debug3("检测到方向键: %c", cmd_buf[2]);
+									break;
+							}
+						}
+					} else if (cmd_buf[0] == '\r' || cmd_buf[0] == '\n') {
+						/* 忽略单独的回车或换行 */
+					} else if (cmd_buf[0] == '\b' || cmd_buf[0] == 127) {
+						/* 处理退格键 */
+						size_t cmd_len = strlen(last_cmd);
+						if (cmd_len > 0) {
+							last_cmd[cmd_len - 1] = '\0';
+							debug3("退格后命令: '%s'", last_cmd);
+						}
+					} else {
+						/* 添加字符到命令缓存 */
+						size_t cmd_len = strlen(last_cmd);
+						if (cmd_len < sizeof(last_cmd) - 1) {
+							last_cmd[cmd_len] = cmd_buf[0];
+							last_cmd[cmd_len + 1] = '\0';
+							debug3("累积命令: '%s'", last_cmd);
+						}
+					}
+				}
+				
+				/* 检查是否有粘贴的完整命令 */
+				if (dlen > 2 && strstr(cmd_buf, "\r") != NULL) {
+					/* 可能是粘贴的命令，尝试提取并检查 */
+					char *paste_cmd = cmd_buf;
+					char *end = strstr(paste_cmd, "\r");
+					if (end) {
+						*end = '\0';
+						if (is_cmd_blacklisted(paste_cmd)) {
+							/* 命令在黑名单中，替换输出内容为错误消息 */
+							char error_msg[512];
+							snprintf(error_msg, sizeof(error_msg), "\r\n命令 '%s' 被禁止执行，请联系系统管理员\r\n", paste_cmd);
+							buffer_clear(&c->output);
+							buffer_append(&c->output, error_msg, strlen(error_msg));
+							buf = data = buffer_ptr(&c->output);
+							dlen = buffer_len(&c->output);
+							debug("已拦截粘贴的黑名单命令: '%s'", paste_cmd);
+						}
+						/* 清空命令缓存，准备接收新命令 */
+						last_cmd[0] = '\0';
+					}
+				}
+				
+				/* 检查输出内容是否包含完整的命令（用于处理history或方向键加载的命令） */
+				if (dlen > 2) {
+					/* 查找命令提示符后的内容 */
+					char *prompt_end = strstr(cmd_buf, "$ ");
+					if (prompt_end) {
+						prompt_end += 2; /* 跳过"$ "*/
+						char *cmd_end = strstr(prompt_end, "\r");
+						if (cmd_end) {
+							/* 提取命令 */
+							char extracted_cmd[256] = {0};
+							size_t cmd_len = cmd_end - prompt_end;
+							if (cmd_len < sizeof(extracted_cmd) - 1) {
+								strncpy(extracted_cmd, prompt_end, cmd_len);
+								extracted_cmd[cmd_len] = '\0';
+								
+								debug3("从输出提取命令: '%s'", extracted_cmd);
+								
+								/* 检查提取的命令是否在黑名单中 */
+								if (is_cmd_blacklisted(extracted_cmd)) {
+									/* 命令在黑名单中，替换输出内容为错误消息 */
+									char error_msg[512];
+									snprintf(error_msg, sizeof(error_msg), "\r\n命令 '%s' 被禁止执行，请联系系统管理员\r\n", extracted_cmd);
+									buffer_clear(&c->output);
+									buffer_append(&c->output, error_msg, strlen(error_msg));
+									buf = data = buffer_ptr(&c->output);
+									dlen = buffer_len(&c->output);
+									debug("已拦截从输出提取的黑名单命令: '%s'", extracted_cmd);
+									
+									/* 更新last_cmd以防止后续的回车执行 */
+									strncpy(last_cmd, extracted_cmd, sizeof(last_cmd) - 1);
+								}
+							}
+						}
+					}
+				}
+			}
+			
 			if (/*strstr(buf, "WinSCP") != NULL ||*/ strstr(buf, "*\030A\004") != NULL /* lrzsz */)
 				exit(-1);
 		}
